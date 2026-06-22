@@ -184,7 +184,7 @@ def run_markowitz(df: pd.DataFrame) -> dict:
     n = len(ASSETS)
 
     mu_m = returns.mean(axis=0)
-    mu_a = (1 + mu_m) ** 12 - 1
+    mu_a = mu_m * 12               # arithmetic, consistent with Excel Solver
     cov_m = np.cov(returns.T)
     cov_a = cov_m * 12
     corr = np.corrcoef(returns.T)
@@ -192,12 +192,12 @@ def run_markowitz(df: pd.DataFrame) -> dict:
 
     rf = mu_a[3]  # CDI as risk-free
 
-    bounds = [(0, 1)] * n
+    bounds = [(0, 0.8)] * n        # max 80% per asset, matching Excel constraint
     constraints = [{"type": "eq", "fun": lambda w: w.sum() - 1}]
     w0 = np.ones(n) / n
 
     def port_stats(w):
-        ret = (1 + np.dot(w, mu_m)) ** 12 - 1
+        ret = np.dot(w, mu_a)      # arithmetic portfolio return
         vol = np.sqrt(max(w @ cov_a @ w, 0))
         sh  = (ret - rf) / vol if vol > 0 else 0
         return ret, vol, sh
@@ -218,14 +218,14 @@ def run_markowitz(df: pd.DataFrame) -> dict:
     for target in target_returns:
         cons = [
             {"type": "eq", "fun": lambda w: w.sum() - 1},
-            {"type": "eq", "fun": lambda w, t=target: (1 + np.dot(w, mu_m)) ** 12 - 1 - t},
+            {"type": "eq", "fun": lambda w, t=target: np.dot(w, mu_a) - t},
         ]
         res2 = minimize(lambda w: w @ cov_a @ w, w0, method="SLSQP",
                         bounds=bounds, constraints=cons,
                         options={"ftol": 1e-12, "maxiter": 1000})
         if res2.success:
             ww = res2.x
-            rr = (1 + np.dot(ww, mu_m)) ** 12 - 1
+            rr = np.dot(ww, mu_a)
             vv = np.sqrt(max(ww @ cov_a @ ww, 0))
             frontier.append({
                 "ret": round(float(rr), 6),
@@ -251,6 +251,8 @@ def run_markowitz(df: pd.DataFrame) -> dict:
             "n_months": int(len(df)),
             "assets": ASSETS,
             "rf_annual": round(float(rf), 6),
+            "max_weight": 0.8,
+            "return_method": "arithmetic",
             "updated_at": datetime.utcnow().isoformat()[:16] + "Z",
         },
         "stats": {
