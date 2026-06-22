@@ -1,0 +1,50 @@
+name: Atualização mensal — Markowitz
+
+on:
+  # Roda no dia 2 de cada mês às 08:00 UTC (05:00 BRT)
+  # Dia 2 garante que o fechamento de mês já foi processado nas fontes
+  schedule:
+    - cron: "0 8 2 * *"
+
+  # Permite rodar manualmente pelo painel do GitHub Actions
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # necessário para o git commit/push
+
+    steps:
+      # 1. Checkout do repositório
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Python 3.11
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 3. Dependências
+      - name: Instalar dependências
+        run: pip install yfinance pandas numpy scipy requests
+
+      # 4. Executar script de atualização
+      - name: Rodar update.py
+        run: python update.py
+
+      # 5. Commit e push automático (só se houver mudança)
+      - name: Commit se houver mudança
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/returns.csv data/frontier.json
+          # Só commita se houver diff
+          if git diff --cached --quiet; then
+            echo "Nenhuma mudança — nada a commitar."
+          else
+            MONTH=$(date -u +"%b/%Y")
+            git commit -m "dados: atualização automática ${MONTH}"
+            git push
+          fi
