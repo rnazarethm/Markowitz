@@ -4,920 +4,918 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Fronteira Eficiente — Markowitz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-  /* ── Tokens ─────────────────────────────────────────────────────────────── */
-  :root {
-    --bg:        #0d0f14;
-    --surface:   #151820;
-    --surface2:  #1c2030;
-    --border:    #252d40;
-    --amber:     #f5a623;
-    --amber-dim: rgba(245,166,35,0.12);
-    --amber-glow:rgba(245,166,35,0.25);
-    --green:     #3dd68c;
-    --red:       #f56060;
-    --blue:      #5b9cf6;
-    --purple:    #a78bfa;
-    --text:      #e8ecf4;
-    --text-2:    #8a92a8;
-    --text-3:    #4e5770;
-    --mono:      'IBM Plex Mono', 'Courier New', monospace;
-    --sans:      'Inter', system-ui, sans-serif;
-  }
+/* ── Design tokens: Swiss editorial ─────────────────────────────────────────
+   Palette: paper white / ink black / one accent (petrol blue)
+   Grid: 12 columns, 24px gutter, max 1200px
+   Type: Inter (body) + IBM Plex Mono (data)
+   Rule: all decoration is information
+──────────────────────────────────────────────────────────────────────────── */
+:root {
+  --white:   #ffffff;
+  --paper:   #f7f7f5;
+  --rule:    #d8d8d4;
+  --rule-lt: #ebebea;
+  --ink:     #0f0f0e;
+  --ink-2:   #4a4a48;
+  --ink-3:   #9a9a96;
+  --accent:  #1a4d6e;       /* single accent: deep petrol */
+  --accent-l:#e8f0f5;
 
-  /* ── Reset ──────────────────────────────────────────────────────────────── */
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  /* asset colours — muted, non-neon */
+  --c-vt:   #2563a8;
+  --c-bova: #b84040;
+  --c-imab: #2a7a52;
+  --c-cdi:  #6b4fa0;
 
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+  --mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --sans: 'Inter', system-ui, sans-serif;
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 14px;
-    line-height: 1.5;
-    min-height: 100vh;
-    padding: 0 0 80px;
-  }
+  --col: 80px;
+  --gap: 24px;
+  --max: 1200px;
+}
 
-  /* ── Header ─────────────────────────────────────────────────────────────── */
-  header {
-    border-bottom: 1px solid var(--border);
-    padding: 28px 40px 24px;
-    display: flex;
-    align-items: baseline;
-    gap: 20px;
-    flex-wrap: wrap;
-  }
-  .header-title {
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--amber);
-  }
-  .header-meta {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text-3);
-    letter-spacing: 0.04em;
-  }
-  .header-period {
-    margin-left: auto;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text-3);
-  }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  /* ── Layout ─────────────────────────────────────────────────────────────── */
-  .container { max-width: 1100px; margin: 0 auto; padding: 0 40px; }
+html { scroll-behavior: smooth; }
 
-  section { margin-top: 40px; }
-  .section-label {
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .section-label::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--border);
-  }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
 
-  /* ── Cards ──────────────────────────────────────────────────────────────── */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 24px;
-  }
+/* ── Grid ────────────────────────────────────────────────────────────────── */
+.wrap {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 0 40px;
+}
 
-  /* ── Portfolio comparison grid ──────────────────────────────────────────── */
-  .portfolios-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-  @media (max-width: 680px) { .portfolios-grid { grid-template-columns: 1fr; } }
+/* ── Rules ───────────────────────────────────────────────────────────────── */
+hr { border: none; border-top: 1px solid var(--rule); }
+.rule-heavy { border-top: 2px solid var(--ink); }
 
-  .portfolio-card { position: relative; }
-  .portfolio-card.optimal { border-color: var(--amber); }
-  .portfolio-badge {
-    position: absolute;
-    top: -1px; right: 16px;
-    font-family: var(--mono);
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    padding: 3px 8px;
-    border-radius: 0 0 4px 4px;
-  }
-  .badge-current  { background: var(--surface2); color: var(--text-2); border: 1px solid var(--border); border-top: none; }
-  .badge-optimal  { background: var(--amber); color: #0d0f14; }
+/* ── Masthead ────────────────────────────────────────────────────────────── */
+.masthead {
+  border-bottom: 2px solid var(--ink);
+  padding: 28px 0 20px;
+}
+.masthead-inner {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.masthead-title {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.masthead-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
 
-  .portfolio-title {
-    font-size: 11px;
-    color: var(--text-2);
-    margin-bottom: 20px;
-    margin-top: 4px;
-  }
+/* ── Section headers ─────────────────────────────────────────────────────── */
+.section-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.section-num {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+  padding-right: 16px;
+  border-right: 1px solid var(--rule);
+}
+.section-title {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
 
-  /* Weight bars */
-  .weight-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-  .weight-label {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text-2);
-    width: 60px;
-    flex-shrink: 0;
-  }
-  .weight-bar-track {
-    flex: 1;
-    height: 6px;
-    background: var(--surface2);
-    border-radius: 3px;
-    overflow: hidden;
-  }
-  .weight-bar-fill {
-    height: 100%;
-    border-radius: 3px;
-    transition: width 0.4s ease;
-  }
-  .weight-pct {
-    font-family: var(--mono);
-    font-size: 12px;
-    font-weight: 600;
-    width: 48px;
-    text-align: right;
-    flex-shrink: 0;
-  }
+/* ── Input block ─────────────────────────────────────────────────────────── */
+.input-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+@media (max-width: 600px) {
+  .input-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.input-cell {
+  background: var(--white);
+  padding: 16px 20px;
+}
+.input-cell-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.asset-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.input-label-text {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.input-cell input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 400;
+  padding: 4px 0 8px;
+  outline: none;
+  transition: border-color 0.15s;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.input-cell input::-webkit-outer-spin-button,
+.input-cell input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.input-cell input:focus { border-bottom-color: var(--accent); }
+.input-unit {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 4px;
+}
 
-  /* Asset colors */
-  .c-vt    { background: var(--blue); }
-  .c-bova  { background: var(--red); }
-  .c-imab  { background: var(--green); }
-  .c-cdi   { background: var(--purple); }
-  .col-vt  { color: var(--blue); }
-  .col-bova { color: var(--red); }
-  .col-imab { color: var(--green); }
-  .col-cdi  { color: var(--purple); }
+.sum-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.sum-indicator { font-weight: 500; }
+.sum-ok   { color: var(--c-imab); }
+.sum-warn { color: var(--c-bova); }
 
-  /* Portfolio stats footer */
-  .portfolio-stats {
-    margin-top: 20px;
-    padding-top: 16px;
-    border-top: 1px solid var(--border);
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-  .pstat-label {
-    font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    margin-bottom: 3px;
-  }
-  .pstat-value {
-    font-family: var(--mono);
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text);
-  }
-  .pstat-value.highlight { color: var(--amber); }
+/* ── Portfolio comparison ────────────────────────────────────────────────── */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+@media (max-width: 640px) { .compare-grid { grid-template-columns: 1fr; } }
 
-  /* ── Current weights input ──────────────────────────────────────────────── */
-  .inputs-row {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-  @media (max-width: 600px) { .inputs-row { grid-template-columns: repeat(2, 1fr); } }
+.compare-col {
+  background: var(--white);
+  padding: 28px 28px 24px;
+}
+.compare-col.col-optimal {
+  background: var(--accent-l);
+}
 
-  .input-group label {
-    display: block;
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-  .input-group input {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 14px;
-    padding: 8px 12px;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-  .input-group input:focus { border-color: var(--amber); }
+.compare-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  margin-bottom: 20px;
+  border: 1px solid currentColor;
+}
+.badge-current  { color: var(--ink-3); }
+.badge-optimal  { color: var(--accent); }
 
-  .sum-indicator {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text-3);
-    margin-bottom: 16px;
-  }
-  .sum-indicator.ok   { color: var(--green); }
-  .sum-indicator.warn { color: var(--red); }
+/* Weight rows */
+.weight-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 52px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule-lt);
+}
+.weight-row:first-child { border-top: 1px solid var(--rule-lt); }
 
-  /* ── Chart section ──────────────────────────────────────────────────────── */
-  .chart-wrap {
-    position: relative;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 28px 28px 20px;
-  }
-  .chart-canvas-wrap {
-    position: relative;
-    height: 380px;
-  }
+.wlabel {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+}
+.wbar-track {
+  height: 2px;
+  background: var(--rule);
+  position: relative;
+}
+.wbar-fill {
+  position: absolute;
+  left: 0; top: 0;
+  height: 100%;
+  transition: width 0.35s ease;
+}
+.wpct {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: right;
+}
 
-  /* Hover tooltip */
-  #frontier-tooltip {
-    position: absolute;
-    pointer-events: none;
-    background: var(--surface2);
-    border: 1px solid var(--amber);
-    border-radius: 6px;
-    padding: 12px 14px;
-    font-family: var(--mono);
-    font-size: 11px;
-    min-width: 170px;
-    opacity: 0;
-    transition: opacity 0.1s;
-    z-index: 10;
-  }
-  .tt-row { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 5px; }
-  .tt-label { color: var(--text-3); }
-  .tt-val   { font-weight: 600; }
-  .tt-divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
-  .tt-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .tt-bar-track { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
-  .tt-bar-fill  { height: 100%; border-radius: 2px; }
+/* Portfolio KPIs */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  margin-top: 24px;
+  border-top: 2px solid var(--rule);
+  padding-top: 16px;
+}
+.kpi-block { padding-right: 16px; }
+.kpi-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 4px;
+}
+.kpi-value {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--ink);
+}
+.col-optimal .kpi-value { color: var(--accent); }
 
-  /* Chart legend */
-  .chart-legend {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-    margin-top: 16px;
-    padding-top: 14px;
-    border-top: 1px solid var(--border);
-  }
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text-2);
-  }
-  .legend-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .legend-line {
-    width: 18px; height: 2px;
-    flex-shrink: 0;
-  }
+/* ── Chart ───────────────────────────────────────────────────────────────── */
+.chart-outer {
+  background: var(--white);
+  border: 1px solid var(--rule);
+  padding: 32px 32px 24px;
+}
+.chart-canvas-wrap {
+  position: relative;
+  height: 400px;
+}
+#frontier-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--white);
+  border: 1px solid var(--ink);
+  padding: 14px 16px;
+  font-family: var(--mono);
+  font-size: 11px;
+  min-width: 160px;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 10;
+}
+.tt-kv { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 4px; color: var(--ink-2); }
+.tt-kv span:last-child { color: var(--ink); font-weight: 500; }
+.tt-rule { border: none; border-top: 1px solid var(--rule); margin: 8px 0; }
+.tt-wrow { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.tt-wlabel { font-size: 10px; color: var(--ink-2); width: 48px; }
+.tt-wtrack { flex: 1; height: 2px; background: var(--rule-lt); }
+.tt-wfill  { height: 100%; }
+.tt-wpct   { font-size: 10px; color: var(--ink); width: 32px; text-align: right; }
 
-  /* ── Stats grid ─────────────────────────────────────────────────────────── */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-  @media (max-width: 680px) { .stats-grid { grid-template-columns: 1fr; } }
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+.leg-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-2);
+  letter-spacing: 0.04em;
+}
+.leg-line { width: 20px; height: 1px; }
+.leg-dot  { width: 8px; height: 8px; border-radius: 50%; }
+.leg-sq   { width: 8px; height: 8px; }
 
-  /* Asset stats table */
-  .asset-table { width: 100%; border-collapse: collapse; }
-  .asset-table th {
-    font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    text-align: right;
-    padding: 0 0 10px 0;
-    font-weight: 500;
-  }
-  .asset-table th:first-child { text-align: left; }
-  .asset-table td {
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 7px 0;
-    text-align: right;
-    border-top: 1px solid var(--border);
-    color: var(--text-2);
-  }
-  .asset-table td:first-child { text-align: left; font-weight: 500; }
-  .asset-table tr:hover td { color: var(--text); }
+/* ── Stats ───────────────────────────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+@media (max-width: 680px) { .stats-grid { grid-template-columns: 1fr; } }
 
-  /* Correlation matrix */
-  .corr-table { width: 100%; border-collapse: collapse; }
-  .corr-table th {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--text-3);
-    padding: 0 0 8px 0;
-    text-align: center;
-    font-weight: 500;
-  }
-  .corr-table th:first-child { text-align: left; }
-  .corr-table td {
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 6px 4px;
-    text-align: center;
-    border-top: 1px solid var(--border);
-  }
-  .corr-table td:first-child { text-align: left; color: var(--text-2); }
-  .corr-cell { display: inline-block; width: 48px; text-align: center; padding: 2px 4px; border-radius: 3px; }
+.stats-panel {
+  background: var(--white);
+  padding: 28px;
+}
+.stats-panel-title {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 20px;
+}
 
-  /* ── Footer note ────────────────────────────────────────────────────────── */
-  .footnote {
-    margin-top: 32px;
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--text-3);
-    line-height: 1.8;
-    border-top: 1px solid var(--border);
-    padding-top: 20px;
-  }
-  .footnote strong { color: var(--text-2); font-weight: 500; }
+/* Asset table */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-align: right;
+  padding: 0 0 12px;
+  font-weight: 400;
+  border-bottom: 1px solid var(--rule);
+}
+.data-table th:first-child { text-align: left; }
+.data-table td {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 10px 0;
+  text-align: right;
+  border-bottom: 1px solid var(--rule-lt);
+  color: var(--ink-2);
+}
+.data-table td:first-child { text-align: left; }
+.data-table tr:hover td { color: var(--ink); }
+
+/* Corr matrix */
+.corr-wrap { overflow-x: auto; }
+.corr-table { width: 100%; border-collapse: collapse; min-width: 260px; }
+.corr-table th {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--ink-3);
+  text-align: center;
+  padding: 0 0 12px;
+  font-weight: 400;
+  border-bottom: 1px solid var(--rule);
+}
+.corr-table th:first-child { text-align: left; }
+.corr-table td {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 8px 4px;
+  text-align: center;
+  border-bottom: 1px solid var(--rule-lt);
+  color: var(--ink-2);
+}
+.corr-table td:first-child { text-align: left; }
+.corr-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 2px;
+  min-width: 44px;
+  text-align: center;
+}
+
+/* ── Methodological note ─────────────────────────────────────────────────── */
+.method-note {
+  padding: 32px 0 64px;
+  border-top: 1px solid var(--rule);
+  margin-top: 40px;
+}
+.method-note p {
+  font-size: 11px;
+  color: var(--ink-3);
+  line-height: 1.7;
+  max-width: 760px;
+}
+.method-note strong { color: var(--ink-2); font-weight: 500; }
+
+section { margin-top: 0; padding-bottom: 40px; }
 </style>
 </head>
 <body>
 
-<header>
-  <span class="header-title">Fronteira Eficiente · Markowitz</span>
-  <span class="header-meta">4 ativos · sem venda a descoberto</span>
-  <span class="header-period" id="header-period"></span>
-</header>
+<!-- ── Masthead ──────────────────────────────────────────────────────────────── -->
+<div class="wrap">
+  <header class="masthead">
+    <div class="masthead-inner">
+      <span class="masthead-title">Análise de Portfólio · Markowitz</span>
+      <span class="masthead-sub" id="hdr-meta"></span>
+    </div>
+  </header>
+</div>
 
-<div class="container">
+<div class="wrap">
 
-  <!-- ── Section 1: Current portfolio input ─────────────────────────────── -->
+  <!-- ── §1 Pesos atuais ──────────────────────────────────────────────────── -->
   <section>
-    <div class="section-label">Carteira atual — insira os pesos</div>
-    <div class="card">
-      <div class="inputs-row">
-        <div class="input-group">
-          <label class="col-vt">VT_BRL <span style="color:var(--text-3)">%</span></label>
-          <input type="number" id="w-vt" value="20" min="0" max="100" step="1">
+    <div class="section-head">
+      <span class="section-num">01</span>
+      <span class="section-title">Carteira atual — insira os pesos</span>
+    </div>
+
+    <div class="input-grid">
+      <div class="input-cell">
+        <div class="input-cell-label">
+          <div class="asset-dot" style="background:var(--c-vt)"></div>
+          <span class="input-label-text">VT_BRL</span>
         </div>
-        <div class="input-group">
-          <label class="col-bova">BOVA11 <span style="color:var(--text-3)">%</span></label>
-          <input type="number" id="w-bova" value="5" min="0" max="100" step="1">
-        </div>
-        <div class="input-group">
-          <label class="col-imab">IMAB11 <span style="color:var(--text-3)">%</span></label>
-          <input type="number" id="w-imab" value="25" min="0" max="100" step="1">
-        </div>
-        <div class="input-group">
-          <label class="col-cdi">CDI <span style="color:var(--text-3)">%</span></label>
-          <input type="number" id="w-cdi" value="50" min="0" max="100" step="1">
-        </div>
+        <input type="number" id="w-vt"   value="20" min="0" max="100" step="1">
+        <div class="input-unit">%</div>
       </div>
-      <div class="sum-indicator" id="sum-indicator">Soma: 100%</div>
+      <div class="input-cell">
+        <div class="input-cell-label">
+          <div class="asset-dot" style="background:var(--c-bova)"></div>
+          <span class="input-label-text">BOVA11</span>
+        </div>
+        <input type="number" id="w-bova" value="5"  min="0" max="100" step="1">
+        <div class="input-unit">%</div>
+      </div>
+      <div class="input-cell">
+        <div class="input-cell-label">
+          <div class="asset-dot" style="background:var(--c-imab)"></div>
+          <span class="input-label-text">IMAB11</span>
+        </div>
+        <input type="number" id="w-imab" value="25" min="0" max="100" step="1">
+        <div class="input-unit">%</div>
+      </div>
+      <div class="input-cell">
+        <div class="input-cell-label">
+          <div class="asset-dot" style="background:var(--c-cdi)"></div>
+          <span class="input-label-text">CDI</span>
+        </div>
+        <input type="number" id="w-cdi"  value="50" min="0" max="100" step="1">
+        <div class="input-unit">%</div>
+      </div>
+    </div>
+
+    <div class="sum-row">
+      <span class="sum-indicator" id="sum-ind">Soma: 100%</span>
+      <span style="color:var(--rule)">|</span>
+      <span>A carteira é normalizada automaticamente se a soma ≠ 100%</span>
     </div>
   </section>
 
-  <!-- ── Section 2: Portfolio comparison ────────────────────────────────── -->
+  <!-- ── §2 Comparação ────────────────────────────────────────────────────── -->
   <section>
-    <div class="section-label">Comparação de carteiras</div>
-    <div class="portfolios-grid">
+    <div class="section-head">
+      <span class="section-num">02</span>
+      <span class="section-title">Comparação de carteiras</span>
+    </div>
 
-      <div class="card portfolio-card" id="card-current">
-        <span class="portfolio-badge badge-current">Atual</span>
-        <div class="portfolio-title">Carteira conforme pesos acima</div>
-        <div id="weights-current"></div>
-        <div class="portfolio-stats">
-          <div>
-            <div class="pstat-label">Retorno</div>
-            <div class="pstat-value" id="stat-cur-ret">—</div>
+    <div class="compare-grid">
+      <!-- Atual -->
+      <div class="compare-col">
+        <div class="compare-badge badge-current">Atual</div>
+        <div id="bars-current"></div>
+        <div class="kpi-row">
+          <div class="kpi-block">
+            <div class="kpi-label">Retorno</div>
+            <div class="kpi-value" id="kpi-cur-ret">—</div>
           </div>
-          <div>
-            <div class="pstat-label">Volatilidade</div>
-            <div class="pstat-value" id="stat-cur-vol">—</div>
+          <div class="kpi-block">
+            <div class="kpi-label">Volatilidade</div>
+            <div class="kpi-value" id="kpi-cur-vol">—</div>
           </div>
-          <div>
-            <div class="pstat-label">Sharpe</div>
-            <div class="pstat-value" id="stat-cur-sharpe">—</div>
+          <div class="kpi-block">
+            <div class="kpi-label">Sharpe</div>
+            <div class="kpi-value" id="kpi-cur-sh">—</div>
           </div>
         </div>
       </div>
 
-      <div class="card portfolio-card optimal" id="card-optimal">
-        <span class="portfolio-badge badge-optimal">Máx. Sharpe</span>
-        <div class="portfolio-title">Carteira de maior índice de Sharpe</div>
-        <div id="weights-optimal"></div>
-        <div class="portfolio-stats">
-          <div>
-            <div class="pstat-label">Retorno</div>
-            <div class="pstat-value highlight" id="stat-opt-ret">—</div>
+      <!-- Ótima -->
+      <div class="compare-col col-optimal">
+        <div class="compare-badge badge-optimal">Máx. Sharpe</div>
+        <div id="bars-optimal"></div>
+        <div class="kpi-row">
+          <div class="kpi-block">
+            <div class="kpi-label">Retorno</div>
+            <div class="kpi-value" id="kpi-opt-ret">—</div>
           </div>
-          <div>
-            <div class="pstat-label">Volatilidade</div>
-            <div class="pstat-value highlight" id="stat-opt-vol">—</div>
+          <div class="kpi-block">
+            <div class="kpi-label">Volatilidade</div>
+            <div class="kpi-value" id="kpi-opt-vol">—</div>
           </div>
-          <div>
-            <div class="pstat-label">Sharpe</div>
-            <div class="pstat-value highlight" id="stat-opt-sharpe">—</div>
+          <div class="kpi-block">
+            <div class="kpi-label">Sharpe</div>
+            <div class="kpi-value" id="kpi-opt-sh">—</div>
           </div>
         </div>
       </div>
-
     </div>
   </section>
 
-  <!-- ── Section 3: Frontier chart ──────────────────────────────────────── -->
+  <!-- ── §3 Fronteira ─────────────────────────────────────────────────────── -->
   <section>
-    <div class="section-label">Fronteira eficiente</div>
-    <div class="chart-wrap">
+    <div class="section-head">
+      <span class="section-num">03</span>
+      <span class="section-title">Fronteira eficiente</span>
+    </div>
+
+    <div class="chart-outer">
       <div class="chart-canvas-wrap">
-        <canvas id="frontier-chart"></canvas>
+        <canvas id="chart"></canvas>
         <div id="frontier-tooltip"></div>
       </div>
       <div class="chart-legend">
-        <div class="legend-item">
-          <div class="legend-line" style="background:var(--amber)"></div>
+        <div class="leg-item">
+          <div class="leg-line" style="background:var(--accent);height:1px;border-top:1px solid var(--accent)"></div>
           Fronteira eficiente
         </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background:var(--amber)"></div>
+        <div class="leg-item">
+          <div class="leg-dot" style="background:var(--accent)"></div>
           Máx. Sharpe
         </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background:#fff"></div>
+        <div class="leg-item">
+          <div class="leg-sq" style="background:var(--ink)"></div>
           Carteira atual
         </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background:var(--blue)"></div>
+        <div class="leg-item">
+          <div class="leg-dot" style="background:var(--c-vt)"></div>
           VT_BRL
         </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background:var(--red)"></div>
+        <div class="leg-item">
+          <div class="leg-dot" style="background:var(--c-bova)"></div>
           BOVA11
         </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background:var(--green)"></div>
+        <div class="leg-item">
+          <div class="leg-dot" style="background:var(--c-imab)"></div>
           IMAB11
         </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background:var(--purple)"></div>
+        <div class="leg-item">
+          <div class="leg-dot" style="background:var(--c-cdi)"></div>
           CDI
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ── Section 4: Stats ────────────────────────────────────────────────── -->
+  <!-- ── §4 Estatísticas ──────────────────────────────────────────────────── -->
   <section>
-    <div class="section-label">Estatísticas individuais · Ago/2010 – Jun/2026</div>
-    <div class="stats-grid">
+    <div class="section-head">
+      <span class="section-num">04</span>
+      <span class="section-title">Estatísticas individuais · Ago/2010 – Jun/2026</span>
+    </div>
 
-      <div class="card">
-        <table class="asset-table">
+    <div class="stats-grid">
+      <div class="stats-panel">
+        <div class="stats-panel-title">Retorno · Volatilidade · Sharpe</div>
+        <table class="data-table">
           <thead>
             <tr>
               <th>Ativo</th>
-              <th>Ret. Anual</th>
-              <th>Vol. Anual</th>
+              <th>Ret. a.a.</th>
+              <th>Vol. a.a.</th>
               <th>Sharpe</th>
             </tr>
           </thead>
-          <tbody id="asset-stats-body"></tbody>
+          <tbody id="tbl-assets"></tbody>
         </table>
       </div>
-
-      <div class="card">
-        <div style="font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px;">Correlação</div>
-        <table class="corr-table" id="corr-table"></table>
+      <div class="stats-panel">
+        <div class="stats-panel-title">Correlação — retornos mensais</div>
+        <div class="corr-wrap">
+          <table class="corr-table" id="tbl-corr"></table>
+        </div>
       </div>
-
     </div>
   </section>
 
-  <!-- ── Footnote ────────────────────────────────────────────────────────── -->
-  <div class="footnote">
-    <strong>Metodologia</strong> · Retornos mensais logarítmicos. VT_BRL = (1+VT_USD)×(1+USD/BRL)−1, preços ajustados Yahoo Finance.
-    IMAB11: índice IMA-B ANBIMA até Mai/2019, depois ETF IMAB11. CDI: retorno mensal acumulado SGS/BCB.
-    Otimização quadrática (SLSQP) sem venda a descoberto. Taxa livre de risco = CDI médio do período.
-    <strong>Período de estimação</strong>: 191 meses · Ago/2010 → Jun/2026.
-    Os resultados são históricos e não garantem retornos futuros.
+  <!-- ── Nota metodológica ─────────────────────────────────────────────────── -->
+  <div class="method-note">
+    <p>
+      <strong>Metodologia.</strong>
+      Retorno anual aritmético (μ × 12), consistente com o Solver do Excel.
+      VT_BRL = (1 + VT_USD) × (1 + USD/BRL) − 1, preços ajustados Yahoo Finance.
+      IMAB11: índice IMA-B ANBIMA até Mai/2019, depois ETF IMAB11.
+      CDI: retorno mensal acumulado SGS/BCB série 11.
+      Otimização quadrática (SLSQP) sem venda a descoberto, peso máximo 80% por ativo.
+      Taxa livre de risco = CDI médio aritmético do período (9,44% a.a.).
+      <strong>Período:</strong> 191 meses · Ago/2010 → Jun/2026.
+      Resultados históricos não garantem retornos futuros.
+    </p>
   </div>
 
-</div><!-- /container -->
+</div><!-- /wrap -->
 
-<!-- ── Embedded data (pre-computed by update.py) ────────────────────────────── -->
+<!-- ── Data ───────────────────────────────────────────────────────────────────── -->
 <script>
-const FRONTIER_DATA = {"meta": {"period": "Aug/10 \u2013 Jun/26", "n_months": 191, "assets": ["VT_BRL", "BOVA11", "IMAB11", "CDI"], "rf_annual": 0.098557}, "stats": {"VT_BRL": {"mu_monthly": 0.01538482, "mu_annual": 0.201069, "vol_annual": 0.153958}, "BOVA11": {"mu_monthly": 0.00665445, "mu_annual": 0.082842, "vol_annual": 0.209574}, "IMAB11": {"mu_monthly": 0.00874764, "mu_annual": 0.110172, "vol_annual": 0.06765}, "CDI": {"mu_monthly": 0.00786387, "mu_annual": 0.098557, "vol_annual": 0.009896}}, "cov_annual": {"VT_BRL": {"VT_BRL": 0.0237030042, "BOVA11": -0.0020622184, "IMAB11": -0.0029590309, "CDI": -0.0002395096}, "BOVA11": {"VT_BRL": -0.0020622184, "BOVA11": 0.0439211251, "IMAB11": 0.0074809784, "CDI": 2.0176e-06}, "IMAB11": {"VT_BRL": -0.0029590309, "BOVA11": 0.0074809784, "IMAB11": 0.0045765029, "CDI": 6.03246e-05}, "CDI": {"VT_BRL": -0.0002395096, "BOVA11": 2.0176e-06, "IMAB11": 6.03246e-05, "CDI": 9.79352e-05}}, "corr": {"VT_BRL": {"VT_BRL": 1.0, "BOVA11": -0.063914, "IMAB11": -0.284106, "CDI": -0.1572}, "BOVA11": {"VT_BRL": -0.063914, "BOVA11": 1.0, "IMAB11": 0.527661, "CDI": 0.000973}, "IMAB11": {"VT_BRL": -0.284106, "BOVA11": 0.527661, "IMAB11": 1.0, "CDI": 0.090107}, "CDI": {"VT_BRL": -0.1572, "BOVA11": 0.000973, "IMAB11": 0.090107, "CDI": 1.0}}, "max_sharpe": {"weights": {"VT_BRL": 0.470762, "BOVA11": 0.0, "IMAB11": 0.529238, "CDI": 0.0}, "ret": 0.152147, "vol": 0.071136, "sharpe": 0.753342}, "frontier": [{"ret": 0.082842, "vol": 0.209574, "weights": {"VT_BRL": 0.0, "BOVA11": 1.0, "IMAB11": 0.0, "CDI": 0.0}}, {"ret": 0.084846, "vol": 0.182702, "weights": {"VT_BRL": 0.0, "BOVA11": 0.871751, "IMAB11": 0.0, "CDI": 0.128249}}, {"ret": 0.08685, "vol": 0.155887, "weights": {"VT_BRL": 0.0, "BOVA11": 0.74372, "IMAB11": 0.0, "CDI": 0.25628}}, {"ret": 0.088853, "vol": 0.129137, "weights": {"VT_BRL": 0.0, "BOVA11": 0.615904, "IMAB11": 0.0, "CDI": 0.384096}}, {"ret": 0.090857, "vol": 0.102466, "weights": {"VT_BRL": 0.0, "BOVA11": 0.488304, "IMAB11": 0.0, "CDI": 0.511696}}, {"ret": 0.092861, "vol": 0.075909, "weights": {"VT_BRL": 0.0, "BOVA11": 0.360918, "IMAB11": 0.0, "CDI": 0.639082}}, {"ret": 0.094865, "vol": 0.049578, "weights": {"VT_BRL": 0.0, "BOVA11": 0.233747, "IMAB11": 0.0, "CDI": 0.766253}}, {"ret": 0.096869, "vol": 0.02407, "weights": {"VT_BRL": 0.0, "BOVA11": 0.106789, "IMAB11": 0.0, "CDI": 0.893211}}, {"ret": 0.098873, "vol": 0.009775, "weights": {"VT_BRL": 0.003732, "BOVA11": 0.003248, "IMAB11": 0.0, "CDI": 0.993021}}, {"ret": 0.100876, "vol": 0.009619, "weights": {"VT_BRL": 0.020824, "BOVA11": 0.0, "IMAB11": 0.023254, "CDI": 0.955922}}, {"ret": 0.10288, "vol": 0.010225, "weights": {"VT_BRL": 0.038744, "BOVA11": 0.0, "IMAB11": 0.043625, "CDI": 0.91763}}, {"ret": 0.104884, "vol": 0.011488, "weights": {"VT_BRL": 0.056634, "BOVA11": 0.0, "IMAB11": 0.063963, "CDI": 0.879403}}, {"ret": 0.106888, "vol": 0.013218, "weights": {"VT_BRL": 0.074495, "BOVA11": 0.0, "IMAB11": 0.084266, "CDI": 0.841239}}, {"ret": 0.108892, "vol": 0.015255, "weights": {"VT_BRL": 0.092326, "BOVA11": 0.0, "IMAB11": 0.104536, "CDI": 0.803138}}, {"ret": 0.110896, "vol": 0.01749, "weights": {"VT_BRL": 0.110127, "BOVA11": 0.0, "IMAB11": 0.124773, "CDI": 0.7651}}, {"ret": 0.1129, "vol": 0.019853, "weights": {"VT_BRL": 0.127899, "BOVA11": 0.0, "IMAB11": 0.144975, "CDI": 0.727126}}, {"ret": 0.114903, "vol": 0.022303, "weights": {"VT_BRL": 0.145641, "BOVA11": 0.0, "IMAB11": 0.165146, "CDI": 0.689213}}, {"ret": 0.116907, "vol": 0.024812, "weights": {"VT_BRL": 0.163355, "BOVA11": 0.0, "IMAB11": 0.185282, "CDI": 0.651363}}, {"ret": 0.118911, "vol": 0.027363, "weights": {"VT_BRL": 0.181039, "BOVA11": 0.0, "IMAB11": 0.205386, "CDI": 0.613575}}, {"ret": 0.120915, "vol": 0.02994, "weights": {"VT_BRL": 0.198694, "BOVA11": 0.0, "IMAB11": 0.225456, "CDI": 0.57585}}, {"ret": 0.122919, "vol": 0.032546, "weights": {"VT_BRL": 0.21632, "BOVA11": 0.0, "IMAB11": 0.245494, "CDI": 0.538186}}, {"ret": 0.124923, "vol": 0.035164, "weights": {"VT_BRL": 0.233918, "BOVA11": 0.0, "IMAB11": 0.265499, "CDI": 0.500583}}, {"ret": 0.126927, "vol": 0.037794, "weights": {"VT_BRL": 0.251487, "BOVA11": 0.0, "IMAB11": 0.285471, "CDI": 0.463042}}, {"ret": 0.12893, "vol": 0.040432, "weights": {"VT_BRL": 0.269027, "BOVA11": 0.0, "IMAB11": 0.30541, "CDI": 0.425563}}, {"ret": 0.130934, "vol": 0.043076, "weights": {"VT_BRL": 0.286539, "BOVA11": 0.0, "IMAB11": 0.325318, "CDI": 0.388144}}, {"ret": 0.132938, "vol": 0.045724, "weights": {"VT_BRL": 0.304022, "BOVA11": 0.0, "IMAB11": 0.345193, "CDI": 0.350785}}, {"ret": 0.134942, "vol": 0.048375, "weights": {"VT_BRL": 0.321477, "BOVA11": 0.0, "IMAB11": 0.365033, "CDI": 0.31349}}, {"ret": 0.136946, "vol": 0.051028, "weights": {"VT_BRL": 0.338903, "BOVA11": 0.0, "IMAB11": 0.384846, "CDI": 0.27625}}, {"ret": 0.13895, "vol": 0.053681, "weights": {"VT_BRL": 0.356302, "BOVA11": 0.0, "IMAB11": 0.404625, "CDI": 0.239073}}, {"ret": 0.140954, "vol": 0.056335, "weights": {"VT_BRL": 0.373673, "BOVA11": 0.0, "IMAB11": 0.424369, "CDI": 0.201958}}, {"ret": 0.142957, "vol": 0.058988, "weights": {"VT_BRL": 0.391015, "BOVA11": 0.0, "IMAB11": 0.444084, "CDI": 0.164901}}, {"ret": 0.144961, "vol": 0.06164, "weights": {"VT_BRL": 0.40833, "BOVA11": 0.0, "IMAB11": 0.46377, "CDI": 0.1279}}, {"ret": 0.146965, "vol": 0.06429, "weights": {"VT_BRL": 0.425617, "BOVA11": 0.0, "IMAB11": 0.483422, "CDI": 0.090961}}, {"ret": 0.148969, "vol": 0.066939, "weights": {"VT_BRL": 0.442876, "BOVA11": 0.0, "IMAB11": 0.503042, "CDI": 0.054082}}, {"ret": 0.150973, "vol": 0.069586, "weights": {"VT_BRL": 0.460108, "BOVA11": 0.0, "IMAB11": 0.522631, "CDI": 0.017261}}, {"ret": 0.152977, "vol": 0.072249, "weights": {"VT_BRL": 0.479909, "BOVA11": 0.0, "IMAB11": 0.520091, "CDI": 0.0}}, {"ret": 0.15498, "vol": 0.075022, "weights": {"VT_BRL": 0.501973, "BOVA11": 0.0, "IMAB11": 0.498027, "CDI": 0.0}}, {"ret": 0.156984, "vol": 0.077905, "weights": {"VT_BRL": 0.524002, "BOVA11": 0.0, "IMAB11": 0.475998, "CDI": 0.0}}, {"ret": 0.158988, "vol": 0.080885, "weights": {"VT_BRL": 0.545996, "BOVA11": 0.0, "IMAB11": 0.454004, "CDI": 0.0}}, {"ret": 0.160992, "vol": 0.083953, "weights": {"VT_BRL": 0.567956, "BOVA11": 0.0, "IMAB11": 0.432044, "CDI": 0.0}}, {"ret": 0.162996, "vol": 0.087096, "weights": {"VT_BRL": 0.58988, "BOVA11": 0.0, "IMAB11": 0.41012, "CDI": 0.0}}, {"ret": 0.165, "vol": 0.090307, "weights": {"VT_BRL": 0.61177, "BOVA11": 0.0, "IMAB11": 0.38823, "CDI": 0.0}}, {"ret": 0.167004, "vol": 0.093578, "weights": {"VT_BRL": 0.633626, "BOVA11": 0.0, "IMAB11": 0.366374, "CDI": 0.0}}, {"ret": 0.169007, "vol": 0.096901, "weights": {"VT_BRL": 0.655447, "BOVA11": 0.0, "IMAB11": 0.344553, "CDI": 0.0}}, {"ret": 0.171011, "vol": 0.100272, "weights": {"VT_BRL": 0.677233, "BOVA11": 0.0, "IMAB11": 0.322767, "CDI": 0.0}}, {"ret": 0.173015, "vol": 0.103684, "weights": {"VT_BRL": 0.698986, "BOVA11": 0.0, "IMAB11": 0.301014, "CDI": 0.0}}, {"ret": 0.175019, "vol": 0.107133, "weights": {"VT_BRL": 0.720705, "BOVA11": 0.0, "IMAB11": 0.279295, "CDI": 0.0}}, {"ret": 0.177023, "vol": 0.110615, "weights": {"VT_BRL": 0.74239, "BOVA11": 0.0, "IMAB11": 0.25761, "CDI": 0.0}}, {"ret": 0.179027, "vol": 0.114126, "weights": {"VT_BRL": 0.764041, "BOVA11": 0.0, "IMAB11": 0.235959, "CDI": 0.0}}, {"ret": 0.181031, "vol": 0.117663, "weights": {"VT_BRL": 0.785658, "BOVA11": 0.0, "IMAB11": 0.214342, "CDI": 0.0}}, {"ret": 0.183034, "vol": 0.121223, "weights": {"VT_BRL": 0.807241, "BOVA11": 0.0, "IMAB11": 0.192759, "CDI": 0.0}}, {"ret": 0.185038, "vol": 0.124803, "weights": {"VT_BRL": 0.828792, "BOVA11": 0.0, "IMAB11": 0.171208, "CDI": 0.0}}, {"ret": 0.187042, "vol": 0.128402, "weights": {"VT_BRL": 0.850308, "BOVA11": 0.0, "IMAB11": 0.149692, "CDI": 0.0}}, {"ret": 0.189046, "vol": 0.132017, "weights": {"VT_BRL": 0.871792, "BOVA11": 0.0, "IMAB11": 0.128208, "CDI": 0.0}}, {"ret": 0.19105, "vol": 0.135647, "weights": {"VT_BRL": 0.893242, "BOVA11": 0.0, "IMAB11": 0.106758, "CDI": 0.0}}, {"ret": 0.193054, "vol": 0.139289, "weights": {"VT_BRL": 0.914659, "BOVA11": 0.0, "IMAB11": 0.085341, "CDI": 0.0}}, {"ret": 0.195058, "vol": 0.142942, "weights": {"VT_BRL": 0.936044, "BOVA11": 0.0, "IMAB11": 0.063956, "CDI": 0.0}}, {"ret": 0.197061, "vol": 0.146606, "weights": {"VT_BRL": 0.957395, "BOVA11": 0.0, "IMAB11": 0.042605, "CDI": 0.0}}, {"ret": 0.199065, "vol": 0.150278, "weights": {"VT_BRL": 0.978714, "BOVA11": 0.0, "IMAB11": 0.021286, "CDI": 0.0}}, {"ret": 0.201069, "vol": 0.153958, "weights": {"VT_BRL": 1.0, "BOVA11": 0.0, "IMAB11": 0.0, "CDI": 0.0}}], "assets_individual": [{"name": "VT_BRL", "ret": 0.201069, "vol": 0.153958, "sharpe": 0.665846}, {"name": "BOVA11", "ret": 0.082842, "vol": 0.209574, "sharpe": -0.074986}, {"name": "IMAB11", "ret": 0.110172, "vol": 0.06765, "sharpe": 0.1717}, {"name": "CDI", "ret": 0.098557, "vol": 0.009896, "sharpe": 0.0}]};
+const D = {"meta": {"period": "Aug/10 \u2013 Jun/26", "n_months": 191, "assets": ["VT_BRL", "BOVA11", "IMAB11", "CDI"], "rf_annual": 0.094366, "max_weight": 0.8, "return_method": "arithmetic"}, "stats": {"VT_BRL": {"mu_monthly": 0.01538482, "mu_annual": 0.184618, "vol_annual": 0.153958}, "BOVA11": {"mu_monthly": 0.00665445, "mu_annual": 0.079853, "vol_annual": 0.209574}, "IMAB11": {"mu_monthly": 0.00874764, "mu_annual": 0.104972, "vol_annual": 0.06765}, "CDI": {"mu_monthly": 0.00786387, "mu_annual": 0.094366, "vol_annual": 0.009896}}, "cov_annual": {"VT_BRL": {"VT_BRL": 0.0237030042, "BOVA11": -0.0020622184, "IMAB11": -0.0029590309, "CDI": -0.0002395096}, "BOVA11": {"VT_BRL": -0.0020622184, "BOVA11": 0.0439211251, "IMAB11": 0.0074809784, "CDI": 2.0176e-06}, "IMAB11": {"VT_BRL": -0.0029590309, "BOVA11": 0.0074809784, "IMAB11": 0.0045765029, "CDI": 6.03246e-05}, "CDI": {"VT_BRL": -0.0002395096, "BOVA11": 2.0176e-06, "IMAB11": 6.03246e-05, "CDI": 9.79352e-05}}, "corr": {"VT_BRL": {"VT_BRL": 1.0, "BOVA11": -0.063914, "IMAB11": -0.284106, "CDI": -0.1572}, "BOVA11": {"VT_BRL": -0.063914, "BOVA11": 1.0, "IMAB11": 0.527661, "CDI": 0.000973}, "IMAB11": {"VT_BRL": -0.284106, "BOVA11": 0.527661, "IMAB11": 1.0, "CDI": 0.090107}, "CDI": {"VT_BRL": -0.1572, "BOVA11": 0.000973, "IMAB11": 0.090107, "CDI": 1.0}}, "max_sharpe": {"weights": {"VT_BRL": 0.25763, "BOVA11": 0.0, "IMAB11": 0.292454, "CDI": 0.449917}, "ret": 0.120719, "vol": 0.038716, "sharpe": 0.68067}, "frontier": [{"ret": 0.083405, "vol": 0.158312, "weights": {"VT_BRL": 0.0, "BOVA11": 0.755301, "IMAB11": 0.0, "CDI": 0.244699}}, {"ret": 0.08518, "vol": 0.132703, "weights": {"VT_BRL": 0.0, "BOVA11": 0.632952, "IMAB11": 0.0, "CDI": 0.367048}}, {"ret": 0.086956, "vol": 0.107123, "weights": {"VT_BRL": 0.0, "BOVA11": 0.510602, "IMAB11": 0.0, "CDI": 0.489398}}, {"ret": 0.088732, "vol": 0.081598, "weights": {"VT_BRL": 0.0, "BOVA11": 0.388253, "IMAB11": 0.0, "CDI": 0.611747}}, {"ret": 0.090507, "vol": 0.056205, "weights": {"VT_BRL": 0.0, "BOVA11": 0.265904, "IMAB11": 0.0, "CDI": 0.734096}}, {"ret": 0.092283, "vol": 0.037195, "weights": {"VT_BRL": 0.0, "BOVA11": 0.167386, "IMAB11": 0.032614, "CDI": 0.8}}, {"ret": 0.094059, "vol": 0.026113, "weights": {"VT_BRL": 0.0, "BOVA11": 0.096694, "IMAB11": 0.103306, "CDI": 0.8}}, {"ret": 0.095834, "vol": 0.017762, "weights": {"VT_BRL": 0.0, "BOVA11": 0.026002, "IMAB11": 0.173998, "CDI": 0.8}}, {"ret": 0.09761, "vol": 0.01492, "weights": {"VT_BRL": 0.014094, "BOVA11": 0.0, "IMAB11": 0.185906, "CDI": 0.8}}, {"ret": 0.099386, "vol": 0.013535, "weights": {"VT_BRL": 0.036389, "BOVA11": 0.0, "IMAB11": 0.163611, "CDI": 0.8}}, {"ret": 0.101161, "vol": 0.013333, "weights": {"VT_BRL": 0.058683, "BOVA11": 0.0, "IMAB11": 0.141317, "CDI": 0.8}}, {"ret": 0.102937, "vol": 0.014365, "weights": {"VT_BRL": 0.080978, "BOVA11": 0.0, "IMAB11": 0.119022, "CDI": 0.8}}, {"ret": 0.104713, "vol": 0.016345, "weights": {"VT_BRL": 0.101173, "BOVA11": 0.0, "IMAB11": 0.114594, "CDI": 0.784234}}, {"ret": 0.106488, "vol": 0.018593, "weights": {"VT_BRL": 0.118529, "BOVA11": 0.0, "IMAB11": 0.134324, "CDI": 0.747147}}, {"ret": 0.11004, "vol": 0.023373, "weights": {"VT_BRL": 0.153241, "BOVA11": 0.0, "IMAB11": 0.173785, "CDI": 0.672974}}, {"ret": 0.111815, "vol": 0.025852, "weights": {"VT_BRL": 0.170598, "BOVA11": 0.0, "IMAB11": 0.193516, "CDI": 0.635887}}, {"ret": 0.115367, "vol": 0.030918, "weights": {"VT_BRL": 0.20531, "BOVA11": 0.0, "IMAB11": 0.232977, "CDI": 0.561713}}, {"ret": 0.117142, "vol": 0.033488, "weights": {"VT_BRL": 0.222666, "BOVA11": 0.0, "IMAB11": 0.252707, "CDI": 0.524627}}, {"ret": 0.118918, "vol": 0.036076, "weights": {"VT_BRL": 0.240022, "BOVA11": 0.0, "IMAB11": 0.272438, "CDI": 0.48754}}, {"ret": 0.120694, "vol": 0.038678, "weights": {"VT_BRL": 0.257379, "BOVA11": 0.0, "IMAB11": 0.292168, "CDI": 0.450453}}, {"ret": 0.122469, "vol": 0.041292, "weights": {"VT_BRL": 0.274735, "BOVA11": 0.0, "IMAB11": 0.311899, "CDI": 0.413366}}, {"ret": 0.124245, "vol": 0.043916, "weights": {"VT_BRL": 0.292091, "BOVA11": 0.0, "IMAB11": 0.331629, "CDI": 0.37628}}, {"ret": 0.126021, "vol": 0.046547, "weights": {"VT_BRL": 0.309447, "BOVA11": 0.0, "IMAB11": 0.35136, "CDI": 0.339193}}, {"ret": 0.127796, "vol": 0.049185, "weights": {"VT_BRL": 0.326803, "BOVA11": 0.0, "IMAB11": 0.37109, "CDI": 0.302106}}, {"ret": 0.129572, "vol": 0.051829, "weights": {"VT_BRL": 0.34416, "BOVA11": 0.0, "IMAB11": 0.390821, "CDI": 0.26502}}, {"ret": 0.131348, "vol": 0.054477, "weights": {"VT_BRL": 0.361516, "BOVA11": 0.0, "IMAB11": 0.410551, "CDI": 0.227933}}, {"ret": 0.133123, "vol": 0.05713, "weights": {"VT_BRL": 0.378872, "BOVA11": 0.0, "IMAB11": 0.430282, "CDI": 0.190846}}, {"ret": 0.134899, "vol": 0.059786, "weights": {"VT_BRL": 0.396228, "BOVA11": 0.0, "IMAB11": 0.450012, "CDI": 0.153759}}, {"ret": 0.136675, "vol": 0.062445, "weights": {"VT_BRL": 0.413585, "BOVA11": 0.0, "IMAB11": 0.469743, "CDI": 0.116673}}, {"ret": 0.13845, "vol": 0.065107, "weights": {"VT_BRL": 0.430941, "BOVA11": 0.0, "IMAB11": 0.489473, "CDI": 0.079586}}, {"ret": 0.140226, "vol": 0.067771, "weights": {"VT_BRL": 0.448297, "BOVA11": 0.0, "IMAB11": 0.509204, "CDI": 0.042499}}, {"ret": 0.142002, "vol": 0.070438, "weights": {"VT_BRL": 0.465653, "BOVA11": 0.0, "IMAB11": 0.528934, "CDI": 0.005412}}, {"ret": 0.143777, "vol": 0.073155, "weights": {"VT_BRL": 0.487227, "BOVA11": 0.0, "IMAB11": 0.512773, "CDI": 0.0}}, {"ret": 0.145553, "vol": 0.075997, "weights": {"VT_BRL": 0.509521, "BOVA11": 0.0, "IMAB11": 0.490479, "CDI": 0.0}}, {"ret": 0.147329, "vol": 0.078953, "weights": {"VT_BRL": 0.531816, "BOVA11": 0.0, "IMAB11": 0.468184, "CDI": 0.0}}, {"ret": 0.149104, "vol": 0.082009, "weights": {"VT_BRL": 0.55411, "BOVA11": 0.0, "IMAB11": 0.44589, "CDI": 0.0}}, {"ret": 0.15088, "vol": 0.085155, "weights": {"VT_BRL": 0.576405, "BOVA11": 0.0, "IMAB11": 0.423595, "CDI": 0.0}}, {"ret": 0.152656, "vol": 0.088381, "weights": {"VT_BRL": 0.598699, "BOVA11": 0.0, "IMAB11": 0.401301, "CDI": 0.0}}, {"ret": 0.154431, "vol": 0.09168, "weights": {"VT_BRL": 0.620994, "BOVA11": 0.0, "IMAB11": 0.379006, "CDI": 0.0}}, {"ret": 0.156207, "vol": 0.095043, "weights": {"VT_BRL": 0.643288, "BOVA11": 0.0, "IMAB11": 0.356712, "CDI": 0.0}}, {"ret": 0.157983, "vol": 0.098463, "weights": {"VT_BRL": 0.665583, "BOVA11": 0.0, "IMAB11": 0.334417, "CDI": 0.0}}, {"ret": 0.159758, "vol": 0.101936, "weights": {"VT_BRL": 0.687877, "BOVA11": 0.0, "IMAB11": 0.312123, "CDI": 0.0}}, {"ret": 0.161534, "vol": 0.105455, "weights": {"VT_BRL": 0.710172, "BOVA11": 0.0, "IMAB11": 0.289828, "CDI": 0.0}}, {"ret": 0.16331, "vol": 0.109017, "weights": {"VT_BRL": 0.732466, "BOVA11": 0.0, "IMAB11": 0.267534, "CDI": 0.0}}, {"ret": 0.165085, "vol": 0.112617, "weights": {"VT_BRL": 0.754761, "BOVA11": 0.0, "IMAB11": 0.245239, "CDI": 0.0}}, {"ret": 0.166861, "vol": 0.116252, "weights": {"VT_BRL": 0.777055, "BOVA11": 0.0, "IMAB11": 0.222945, "CDI": 0.0}}, {"ret": 0.168637, "vol": 0.119918, "weights": {"VT_BRL": 0.79935, "BOVA11": 0.0, "IMAB11": 0.20065, "CDI": 0.0}}], "assets_individual": [{"name": "VT_BRL", "ret": 0.184618, "vol": 0.153958, "sharpe": 0.586208}, {"name": "BOVA11", "ret": 0.079853, "vol": 0.209574, "sharpe": -0.069251}, {"name": "IMAB11", "ret": 0.104972, "vol": 0.06765, "sharpe": 0.156767}, {"name": "CDI", "ret": 0.094366, "vol": 0.009896, "sharpe": 0.0}]};
 </script>
 
 <script>
-// ── Helpers ────────────────────────────────────────────────────────────────────
-const pct  = (v, d=1) => (v*100).toFixed(d) + '%';
-const fmt2 = (v)      => v.toFixed(4);
-
-const ASSET_COLORS = {
-  VT_BRL: '#5b9cf6',
-  BOVA11: '#f56060',
-  IMAB11: '#3dd68c',
-  CDI:    '#a78bfa'
-};
-const ASSET_LABELS = { VT_BRL: 'VT_BRL', BOVA11: 'BOVA11', IMAB11: 'IMAB11', CDI: 'CDI' };
-
-// ── Covariance matrix for current-portfolio calcs ──────────────────────────────
-const D = FRONTIER_DATA;
-const ASSETS = D.meta.assets; // ['VT_BRL','BOVA11','IMAB11','CDI']
-const N = ASSETS.length;
+// ── Constants ─────────────────────────────────────────────────────────────────
+const ASSETS = D.meta.assets;
+const COLORS = { VT_BRL:'#2563a8', BOVA11:'#b84040', IMAB11:'#2a7a52', CDI:'#6b4fa0' };
 const RF = D.meta.rf_annual;
+const pct = (v, d=1) => (v*100).toFixed(d) + '%';
+const f4  = v => v.toFixed(4);
 
-function portfolioStats(w) {
-  // w: array of 4 weights (fractions)
-  let ret_m = 0;
-  ASSETS.forEach((a, i) => { ret_m += w[i] * D.stats[a].mu_monthly; });
-  const ret_a = Math.pow(1 + ret_m, 12) - 1;
-
+// ── Portfolio stats (arithmetic, matching Excel) ───────────────────────────────
+function portStats(wArr) {
+  let ret = 0;
+  ASSETS.forEach((a,i) => { ret += wArr[i] * D.stats[a].mu_annual; });
   let variance = 0;
-  ASSETS.forEach((a, i) => {
-    ASSETS.forEach((b, j) => {
-      variance += w[i] * w[j] * D.cov_annual[a][b];
-    });
+  ASSETS.forEach((a,i) => {
+    ASSETS.forEach((b,j) => { variance += wArr[i] * wArr[j] * D.cov_annual[a][b]; });
   });
   const vol = Math.sqrt(Math.max(variance, 0));
-  const sharpe = vol > 0 ? (ret_a - RF) / vol : 0;
-  return { ret: ret_a, vol, sharpe };
+  const sh  = vol > 0 ? (ret - RF) / vol : 0;
+  return { ret, vol, sh };
 }
 
-// ── Weight bars renderer ───────────────────────────────────────────────────────
-function renderWeightBars(containerId, weights) {
-  const el = document.getElementById(containerId);
-  el.innerHTML = '';
-  ASSETS.forEach(a => {
-    const w = weights[a] ?? 0;
-    const row = document.createElement('div');
-    row.className = 'weight-row';
-    row.innerHTML = `
-      <div class="weight-label">${ASSET_LABELS[a]}</div>
-      <div class="weight-bar-track">
-        <div class="weight-bar-fill" style="width:${w*100}%;background:${ASSET_COLORS[a]}"></div>
-      </div>
-      <div class="weight-pct" style="color:${ASSET_COLORS[a]}">${pct(w,1)}</div>
-    `;
-    el.appendChild(row);
-  });
+// ── Weight bars ───────────────────────────────────────────────────────────────
+function renderBars(id, wObj) {
+  const el = document.getElementById(id);
+  el.innerHTML = ASSETS.map(a => {
+    const w = (wObj[a] ?? 0) * 100;
+    return `
+      <div class="weight-row">
+        <span class="wlabel">${a}</span>
+        <div class="wbar-track">
+          <div class="wbar-fill" style="width:${w}%;background:${COLORS[a]}"></div>
+        </div>
+        <span class="wpct" style="color:${COLORS[a]}">${w.toFixed(1)}%</span>
+      </div>`;
+  }).join('');
 }
 
-// ── Update current portfolio ───────────────────────────────────────────────────
-function getInputWeights() {
-  const raw = {
+// ── Read inputs ───────────────────────────────────────────────────────────────
+function readInputs() {
+  return {
     VT_BRL: parseFloat(document.getElementById('w-vt').value)   || 0,
     BOVA11: parseFloat(document.getElementById('w-bova').value) || 0,
     IMAB11: parseFloat(document.getElementById('w-imab').value) || 0,
     CDI:    parseFloat(document.getElementById('w-cdi').value)  || 0,
   };
-  return raw;
 }
 
-function updateCurrentPortfolio() {
-  const raw = getInputWeights();
-  const sum = Object.values(raw).reduce((a, b) => a + b, 0);
+// ── Update current portfolio ──────────────────────────────────────────────────
+function updateCurrent() {
+  const raw = readInputs();
+  const sum = Object.values(raw).reduce((a,b) => a+b, 0);
 
-  const ind = document.getElementById('sum-indicator');
+  // Sum indicator
+  const ind = document.getElementById('sum-ind');
   ind.textContent = `Soma: ${sum.toFixed(1)}%`;
-  if (Math.abs(sum - 100) < 0.01) {
-    ind.className = 'sum-indicator ok';
-  } else {
-    ind.className = 'sum-indicator warn';
-  }
+  ind.className = 'sum-indicator ' + (Math.abs(sum - 100) < 0.05 ? 'sum-ok' : 'sum-warn');
 
-  // Normalize if sum > 0
-  const w = ASSETS.map(a => sum > 0 ? raw[a] / sum / 100 : 1/N);
+  // Normalize
+  const wArr = ASSETS.map(a => sum > 0 ? raw[a] / sum / 100 : 1/ASSETS.length);
   const wObj = {};
-  ASSETS.forEach((a, i) => wObj[a] = w[i]);
+  ASSETS.forEach((a,i) => wObj[a] = wArr[i]);
 
-  renderWeightBars('weights-current', wObj);
+  // ← Bug fix: render bars AND update KPIs
+  renderBars('bars-current', wObj);
 
-  const stats = portfolioStats(w);
-  document.getElementById('stat-cur-ret').textContent    = pct(stats.ret, 2);
-  document.getElementById('stat-cur-vol').textContent    = pct(stats.vol, 2);
-  document.getElementById('stat-cur-sharpe').textContent = fmt2(stats.sharpe);
+  const s = portStats(wArr);
+  document.getElementById('kpi-cur-ret').textContent = pct(s.ret, 2);
+  document.getElementById('kpi-cur-vol').textContent = pct(s.vol, 2);
+  document.getElementById('kpi-cur-sh').textContent  = f4(s.sh);
 
-  // Update chart current-portfolio point
-  updateCurrentPoint(stats.vol, stats.ret);
+  // Update chart point
+  updateChartCurrent(s.vol * 100, s.ret * 100);
 }
 
-// ── Render optimal portfolio ───────────────────────────────────────────────────
-function renderOptimalPortfolio() {
+// ── Render optimal ────────────────────────────────────────────────────────────
+function renderOptimal() {
   const ms = D.max_sharpe;
-  renderWeightBars('weights-optimal', ms.weights);
-  document.getElementById('stat-opt-ret').textContent    = pct(ms.ret, 2);
-  document.getElementById('stat-opt-vol').textContent    = pct(ms.vol, 2);
-  document.getElementById('stat-opt-sharpe').textContent = fmt2(ms.sharpe);
+  renderBars('bars-optimal', ms.weights);
+  document.getElementById('kpi-opt-ret').textContent = pct(ms.ret, 2);
+  document.getElementById('kpi-opt-vol').textContent = pct(ms.vol, 2);
+  document.getElementById('kpi-opt-sh').textContent  = f4(ms.sharpe);
 }
 
-// ── Asset stats table ──────────────────────────────────────────────────────────
-function renderAssetStats() {
-  const tbody = document.getElementById('asset-stats-body');
-  D.assets_individual.forEach(a => {
-    const tr = document.createElement('tr');
-    const sharpeColor = a.sharpe > 0.3 ? 'var(--green)' : a.sharpe > 0 ? 'var(--text)' : 'var(--red)';
-    tr.innerHTML = `
-      <td style="color:${ASSET_COLORS[a.name]}">${a.name}</td>
-      <td>${pct(a.ret, 2)}</td>
-      <td>${pct(a.vol, 2)}</td>
-      <td style="color:${sharpeColor}">${fmt2(a.sharpe)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
+// ── Asset table ───────────────────────────────────────────────────────────────
+function renderAssetTable() {
+  document.getElementById('tbl-assets').innerHTML = D.assets_individual.map(a => {
+    const sc = a.sharpe > 0.3 ? '#2a7a52' : a.sharpe > 0 ? '#4a4a48' : '#b84040';
+    return `<tr>
+      <td style="color:${COLORS[a.name]}">${a.name}</td>
+      <td>${pct(a.ret,2)}</td>
+      <td>${pct(a.vol,2)}</td>
+      <td style="color:${sc}">${f4(a.sharpe)}</td>
+    </tr>`;
+  }).join('');
 }
 
-// ── Correlation matrix ─────────────────────────────────────────────────────────
-function corrColor(v) {
-  // v in [-1, 1]
-  const abs = Math.abs(v);
-  if (v === 1)   return 'rgba(255,255,255,0.04)';
-  if (v > 0.4)   return 'rgba(245,96,96,0.20)';
-  if (v > 0.1)   return 'rgba(245,96,96,0.10)';
-  if (v < -0.2)  return 'rgba(61,214,140,0.18)';
+// ── Correlation matrix ────────────────────────────────────────────────────────
+function corrBg(v) {
+  if (v >= 1)    return 'transparent';
+  if (v > 0.4)   return 'rgba(184,64,64,0.15)';
+  if (v > 0.1)   return 'rgba(184,64,64,0.07)';
+  if (v < -0.15) return 'rgba(42,122,82,0.12)';
   return 'transparent';
 }
-
-function renderCorrMatrix() {
-  const table = document.getElementById('corr-table');
-  // Header row
-  const thead = document.createElement('thead');
-  const hrow = document.createElement('tr');
-  hrow.innerHTML = '<th></th>' + ASSETS.map(a =>
-    `<th style="color:${ASSET_COLORS[a]}">${a}</th>`).join('');
-  thead.appendChild(hrow);
-  table.appendChild(thead);
-
-  const tbody = document.createElement('tbody');
-  ASSETS.forEach(a => {
-    const tr = document.createElement('tr');
-    let cells = `<td style="color:${ASSET_COLORS[a]}">${a}</td>`;
-    ASSETS.forEach(b => {
+function renderCorr() {
+  const t = document.getElementById('tbl-corr');
+  const hdr = '<thead><tr><th></th>' +
+    ASSETS.map(a => `<th style="color:${COLORS[a]}">${a}</th>`).join('') +
+    '</tr></thead>';
+  const rows = ASSETS.map(a =>
+    '<tr><td style="color:' + COLORS[a] + '">' + a + '</td>' +
+    ASSETS.map(b => {
       const v = D.corr[a][b];
       const diag = a === b;
-      const txt = diag ? '—' : v.toFixed(3);
-      const color = diag ? 'var(--text-3)' : v > 0 ? 'var(--text)' : 'var(--green)';
-      cells += `<td><span class="corr-cell" style="background:${corrColor(v)};color:${color}">${txt}</span></td>`;
-    });
-    tr.innerHTML = cells;
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
+      return `<td><span class="corr-chip" style="background:${corrBg(v)};color:${diag?'#9a9a96':'#0f0f0e'}">${diag ? '—' : v.toFixed(3)}</span></td>`;
+    }).join('') + '</tr>'
+  ).join('');
+  t.innerHTML = hdr + '<tbody>' + rows + '</tbody>';
 }
 
-// ── Chart ──────────────────────────────────────────────────────────────────────
-let frontierChart = null;
-let currentPointDataset = null;
-
-function buildChartData() {
-  const frontierPts = D.frontier.map(p => ({ x: p.vol * 100, y: p.ret * 100, _w: p.weights }));
-  const ms = D.max_sharpe;
-  const indPts = D.assets_individual.map(a => ({
-    x: a.vol * 100, y: a.ret * 100, _name: a.name
-  }));
-
-  const raw = getInputWeights();
-  const sum = Object.values(raw).reduce((a, b) => a + b, 0);
-  const w = ASSETS.map(a => sum > 0 ? raw[a] / sum / 100 : 1/N);
-  const cs = portfolioStats(w);
-
-  return {
-    frontierPts,
-    maxSharpePt: { x: ms.vol * 100, y: ms.ret * 100 },
-    currentPt:   { x: cs.vol * 100, y: cs.ret * 100 },
-    indPts
-  };
+// ── Header ────────────────────────────────────────────────────────────────────
+function renderHeader() {
+  document.getElementById('hdr-meta').textContent =
+    `${D.meta.n_months} meses · ${D.meta.period} · retorno aritmético · w ≤ 80%`;
 }
+
+// ── Chart ─────────────────────────────────────────────────────────────────────
+let chartInst = null;
 
 function initChart() {
-  const { frontierPts, maxSharpePt, currentPt, indPts } = buildChartData();
-  const ctx = document.getElementById('frontier-chart').getContext('2d');
+  const frontierPts = D.frontier.map(p => ({ x: p.vol*100, y: p.ret*100, _w: p.weights }));
+  const ms = D.max_sharpe;
+  const indPts = D.assets_individual.map(a => ({ x: a.vol*100, y: a.ret*100, _n: a.name }));
 
-  // Build color array for individual assets
-  const indColors = indPts.map(p => ASSET_COLORS[p._name]);
+  // Initial current point
+  const raw = readInputs();
+  const sum = Object.values(raw).reduce((a,b)=>a+b,0);
+  const wArr = ASSETS.map(a => sum > 0 ? raw[a]/sum/100 : 1/4);
+  const cs = portStats(wArr);
 
-  frontierChart = new Chart(ctx, {
+  const ctx = document.getElementById('chart').getContext('2d');
+  chartInst = new Chart(ctx, {
     type: 'scatter',
     data: {
       datasets: [
-        // 0 - Frontier line
+        // 0 – Frontier
         {
-          label: 'Fronteira',
           data: frontierPts,
-          showLine: true,
-          fill: false,
-          borderColor: '#f5a623',
-          borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 0,
-          tension: 0.3,
-          order: 3
+          showLine: true, fill: false,
+          borderColor: '#1a4d6e', borderWidth: 1.5,
+          pointRadius: 0, pointHoverRadius: 0,
+          tension: 0.25, order: 4
         },
-        // 1 - Max Sharpe
+        // 1 – Max Sharpe
         {
-          label: 'Máx. Sharpe',
-          data: [maxSharpePt],
-          pointRadius: 9,
-          pointHoverRadius: 11,
-          pointBackgroundColor: '#f5a623',
-          pointBorderColor: '#0d0f14',
-          pointBorderWidth: 2,
+          data: [{ x: ms.vol*100, y: ms.ret*100 }],
+          pointRadius: 8, pointHoverRadius: 10,
+          pointBackgroundColor: '#1a4d6e',
+          pointBorderColor: '#f7f7f5', pointBorderWidth: 2,
           order: 1
         },
-        // 2 - Current portfolio
+        // 2 – Current (square marker via pointStyle)
         {
-          label: 'Atual',
-          data: [currentPt],
-          pointRadius: 8,
-          pointHoverRadius: 10,
-          pointBackgroundColor: '#ffffff',
-          pointBorderColor: '#0d0f14',
-          pointBorderWidth: 2,
-          pointStyle: 'circle',
+          data: [{ x: cs.vol*100, y: cs.ret*100 }],
+          pointRadius: 7, pointHoverRadius: 9,
+          pointStyle: 'rect',
+          pointBackgroundColor: '#0f0f0e',
+          pointBorderColor: '#f7f7f5', pointBorderWidth: 1.5,
           order: 1
         },
-        // 3 - Individual assets
+        // 3 – Individual assets
         {
-          label: 'Ativos',
           data: indPts,
-          pointRadius: 6,
-          pointHoverRadius: 8,
-          pointBackgroundColor: indColors,
-          pointBorderColor: '#0d0f14',
-          pointBorderWidth: 1.5,
+          pointRadius: 5, pointHoverRadius: 7,
+          pointBackgroundColor: D.assets_individual.map(a => COLORS[a.name]),
+          pointBorderColor: '#f7f7f5', pointBorderWidth: 1,
           order: 2
         }
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: { duration: 300 },
-      plugins: {
-        legend: { display: false },
-        tooltip: { enabled: false }  // We use custom tooltip
-      },
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 200 },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
       scales: {
         x: {
-          title: {
-            display: true,
-            text: 'Volatilidade anual (%)',
-            color: '#4e5770',
-            font: { family: "'IBM Plex Mono', monospace", size: 11 }
-          },
-          ticks: {
-            color: '#4e5770',
-            font: { family: "'IBM Plex Mono', monospace", size: 10 },
-            callback: v => v.toFixed(0) + '%'
-          },
-          grid: { color: '#1c2030' },
-          border: { color: '#252d40' }
+          title: { display: true, text: 'Volatilidade a.a. (%)',
+                   color: '#9a9a96', font: { family:"'IBM Plex Mono',monospace", size:10 } },
+          ticks: { color:'#9a9a96', font:{ family:"'IBM Plex Mono',monospace", size:10 },
+                   callback: v => v.toFixed(0)+'%' },
+          grid: { color: '#ebebea' },
+          border: { color:'#d8d8d4' }
         },
         y: {
-          title: {
-            display: true,
-            text: 'Retorno anual (%)',
-            color: '#4e5770',
-            font: { family: "'IBM Plex Mono', monospace", size: 11 }
-          },
-          ticks: {
-            color: '#4e5770',
-            font: { family: "'IBM Plex Mono', monospace", size: 10 },
-            callback: v => v.toFixed(0) + '%'
-          },
-          grid: { color: '#1c2030' },
-          border: { color: '#252d40' }
+          title: { display: true, text: 'Retorno a.a. (%)',
+                   color: '#9a9a96', font: { family:"'IBM Plex Mono',monospace", size:10 } },
+          ticks: { color:'#9a9a96', font:{ family:"'IBM Plex Mono',monospace", size:10 },
+                   callback: v => v.toFixed(0)+'%' },
+          grid: { color: '#ebebea' },
+          border: { color:'#d8d8d4' }
         }
       }
     }
   });
 
-  setupFrontierHover(frontierPts);
+  setupHover(frontierPts);
 }
 
-function updateCurrentPoint(vol, ret) {
-  if (!frontierChart) return;
-  frontierChart.data.datasets[2].data = [{ x: vol * 100, y: ret * 100 }];
-  frontierChart.update('none');
+function updateChartCurrent(vol, ret) {
+  if (!chartInst) return;
+  chartInst.data.datasets[2].data = [{ x: vol, y: ret }];
+  chartInst.update('none');
 }
 
-// ── Magnetic hover tooltip ─────────────────────────────────────────────────────
-function setupFrontierHover(frontierPts) {
-  const canvas = document.getElementById('frontier-chart');
-  const tooltip = document.getElementById('frontier-tooltip');
+// ── Magnetic hover ────────────────────────────────────────────────────────────
+function setupHover(pts) {
+  const canvas = document.getElementById('chart');
+  const tip    = document.getElementById('frontier-tooltip');
 
-  canvas.addEventListener('mousemove', (e) => {
+  canvas.addEventListener('mousemove', e => {
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
+    const xScale = chartInst.scales.x;
+    const yScale = chartInst.scales.y;
+    const dx = xScale.getValueForPixel(mx);
+    const dy = yScale.getValueForPixel(my);
 
-    // Convert to data coordinates
-    const xAxis = frontierChart.scales.x;
-    const yAxis = frontierChart.scales.y;
-    const dataX = xAxis.getValueForPixel(mx);
-    const dataY = yAxis.getValueForPixel(my);
-
-    // Find nearest frontier point
-    let minDist = Infinity, nearest = null;
-    frontierPts.forEach(p => {
-      const dx = p.x - dataX, dy = p.y - dataY;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      if (dist < minDist) { minDist = dist; nearest = p; }
+    let best = null, bestD = Infinity;
+    pts.forEach(p => {
+      const d = Math.sqrt((p.x-dx)**2 + (p.y-dy)**2);
+      if (d < bestD) { bestD = d; best = p; }
     });
 
-    if (!nearest || minDist > 8) {
-      tooltip.style.opacity = '0';
-      return;
-    }
+    if (!best || bestD > 6) { tip.style.opacity = '0'; return; }
 
-    // Position tooltip
-    const px = xAxis.getPixelForValue(nearest.x);
-    const py = yAxis.getPixelForValue(nearest.y);
-    let left = px + 16;
-    let top  = py - 20;
-    if (left + 180 > rect.width) left = px - 190;
-    if (top + 200 > rect.height) top = rect.height - 210;
-    tooltip.style.left  = left + 'px';
-    tooltip.style.top   = top  + 'px';
+    const px = xScale.getPixelForValue(best.x);
+    const py = yScale.getPixelForValue(best.y);
+    let left = px + 18;
+    let top  = py - 16;
+    if (left + 175 > rect.width)  left = px - 188;
+    if (top  + 190 > rect.height) top  = rect.height - 195;
+    tip.style.left = left + 'px';
+    tip.style.top  = top  + 'px';
 
-    // Build tooltip content
-    const w = nearest._w;
-    const sharpe = nearest._sharpe;
-    let html = `
-      <div class="tt-row"><span class="tt-label">Retorno</span><span class="tt-val">${nearest.y.toFixed(2)}%</span></div>
-      <div class="tt-row"><span class="tt-label">Volatil.</span><span class="tt-val">${nearest.x.toFixed(2)}%</span></div>
-      <hr class="tt-divider">
-    `;
-    ASSETS.forEach(a => {
-      const wv = (w[a] || 0) * 100;
-      html += `
-        <div class="tt-bar-row">
-          <span style="color:${ASSET_COLORS[a]};font-size:10px;width:50px;flex-shrink:0">${a}</span>
-          <div class="tt-bar-track"><div class="tt-bar-fill" style="width:${wv}%;background:${ASSET_COLORS[a]}"></div></div>
-          <span style="color:var(--text);font-size:10px;width:36px;text-align:right;flex-shrink:0">${wv.toFixed(0)}%</span>
-        </div>
-      `;
-    });
+    const w = best._w;
+    tip.innerHTML =
+      `<div class="tt-kv"><span>Retorno</span><span>${best.y.toFixed(2)}%</span></div>` +
+      `<div class="tt-kv"><span>Volatil.</span><span>${best.x.toFixed(2)}%</span></div>` +
+      `<hr class="tt-rule">` +
+      ASSETS.map(a => {
+        const wv = (w[a]||0)*100;
+        return `<div class="tt-wrow">
+          <span class="tt-wlabel" style="color:${COLORS[a]}">${a}</span>
+          <div class="tt-wtrack"><div class="tt-wfill" style="width:${wv}%;background:${COLORS[a]}"></div></div>
+          <span class="tt-wpct">${wv.toFixed(0)}%</span>
+        </div>`;
+      }).join('');
 
-    tooltip.innerHTML = html;
-    tooltip.style.opacity = '1';
+    tip.style.opacity = '1';
   });
 
-  canvas.addEventListener('mouseleave', () => {
-    tooltip.style.opacity = '0';
-  });
+  canvas.addEventListener('mouseleave', () => { tip.style.opacity = '0'; });
 }
 
-// ── Header metadata ────────────────────────────────────────────────────────────
-function renderHeader() {
-  document.getElementById('header-period').textContent =
-    `${D.meta.n_months} meses · ${D.meta.period}`;
-}
-
-// ── Wire inputs ────────────────────────────────────────────────────────────────
-['w-vt','w-bova','w-imab','w-cdi'].forEach(id => {
-  document.getElementById(id).addEventListener('input', updateCurrentPortfolio);
-});
-
-// ── Init ───────────────────────────────────────────────────────────────────────
+// ── Boot ──────────────────────────────────────────────────────────────────────
 renderHeader();
-renderOptimalPortfolio();
-renderAssetStats();
-renderCorrMatrix();
-updateCurrentPortfolio();
+renderOptimal();
+renderAssetTable();
+renderCorr();
+updateCurrent();          // renders bars-current AND KPIs on load
 initChart();
+
+['w-vt','w-bova','w-imab','w-cdi'].forEach(id =>
+  document.getElementById(id).addEventListener('input', updateCurrent)
+);
 </script>
 </body>
 </html>
